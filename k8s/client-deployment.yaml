@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: client
-          image: akslearningregistry.azurecr.io/weather-client:v2
+          image: akslearningregistry.azurecr.io/weather-client:v3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
