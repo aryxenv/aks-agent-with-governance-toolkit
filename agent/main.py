@@ -18,9 +18,13 @@ POLICY_EVALUATE_URL = os.getenv(
     "POLICY_EVALUATE_URL",
     "http://localhost:8001/evaluate-action",
 )
+FOUNDRY_PROJECT_ENDPOINT = os.getenv(
+    "FOUNDRY_PROJECT_ENDPOINT",
+    "https://learning-model-resource.services.ai.azure.com/api/projects/learning-model",
+)
 
 client = FoundryChatClient(
-    project_endpoint="https://learning-model-resource.services.ai.azure.com",
+    project_endpoint=FOUNDRY_PROJECT_ENDPOINT,
     model="gpt-5-mini",
     credential=DefaultAzureCredential(),
 )
