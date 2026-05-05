@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weather-client
+  labels:
+    app: weather-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weather-client
+  template:
+    metadata:
+      labels:
+        app: weather-client
+    spec:
+      containers:
+        - name: client
+          image: akslearningregistry.azurecr.io/weather-client:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 30
