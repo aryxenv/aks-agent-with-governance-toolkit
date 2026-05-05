@@ -21,6 +21,7 @@ client = FoundryChatClient(
 openmeteo = openmeteo_requests.Client()
 
 
+# helper for get_weather tool
 def geocode_location(location: str) -> tuple[str, float, float]:
     query = urlencode({"q": location, "format": "jsonv2", "limit": 1})
     request = Request(
@@ -87,9 +88,10 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {"status": "agent server healthy"}
 
 
+# main endpoint for the agent
 @app.get("/chat")
 async def chat(query: str):
     def sse(event: str, data: dict) -> str:
@@ -103,7 +105,10 @@ async def chat(query: str):
 
         async for chunk in agent.run(query, stream=True):
             for content in chunk.contents:
-                if content.type == "function_call" and content.call_id not in emitted_tool_calls:
+                if (
+                    content.type == "function_call"
+                    and content.call_id not in emitted_tool_calls
+                ):
                     emitted_tool_calls.add(content.call_id)
                     yield sse(
                         "tool_call",
