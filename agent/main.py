@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Annotated
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -10,13 +11,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from agent_framework import Agent, tool
 from agent_framework.foundry import FoundryChatClient
-from azure.identity import AzureCliCredential
+from azure.identity import DefaultAzureCredential
 from pydantic import Field
+
+POLICY_EVALUATE_URL = os.getenv(
+    "POLICY_EVALUATE_URL",
+    "http://localhost:8001/evaluate-action",
+)
 
 client = FoundryChatClient(
     project_endpoint="https://learning-model-resource.services.ai.azure.com",
     model="gpt-5-mini",
-    credential=AzureCliCredential(),
+    credential=DefaultAzureCredential(),
 )
 openmeteo = openmeteo_requests.Client()
 POLICY_BLOCK_PREFIX = "The weather lookup was blocked by policy. Reason: "
@@ -50,7 +56,7 @@ def geocode_location(location: str) -> tuple[str, float, float]:
 def evaluate_action(tool_name: str, location: str) -> dict:
     request_data = {"tool_name": tool_name, "location": location}
     request = Request(
-        "http://localhost:8001/evaluate-action",
+        POLICY_EVALUATE_URL,
         data=json.dumps(request_data).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
