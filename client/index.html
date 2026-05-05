@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather Agent</title>
+  <script type="module">
+    import {
+      provideFluentDesignSystem,
+      fluentButton,
+      fluentTextField
+    } from "https://unpkg.com/@fluentui/web-components?module";
+
+    provideFluentDesignSystem().register(fluentButton(), fluentTextField());
+  </script>
+  <style>
+    body {
+      margin: 0;
+      background: #f5f5f5;
+      color: #242424;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 760px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    #chat {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 24px 0;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+
+    .user {
+      align-self: flex-end;
+      background: #0078d4;
+      color: white;
+    }
+
+    .agent {
+      align-self: flex-start;
+      background: white;
+      border: 1px solid #ddd;
+    }
+
+    .status {
+      margin-bottom: 8px;
+      color: #616161;
+      font-size: 13px;
+    }
+
+    form {
+      display: flex;
+      gap: 8px;
+    }
+
+    fluent-text-field {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Weather Agent</h1>
+    <div id="chat"></div>
+
+    <form id="form">
+      <fluent-text-field id="query" placeholder="Ask about the weather..." appearance="outline"></fluent-text-field>
+      <fluent-button id="send" appearance="accent" type="submit">Send</fluent-button>
+    </form>
+  </main>
+
+  <script>
+    const apiBaseUrl = "http://localhost:8000";
+    const chat = document.querySelector("#chat");
+    const form = document.querySelector("#form");
+    const queryInput = document.querySelector("#query");
+    const sendButton = document.querySelector("#send");
+
+    let currentStream;
+
+    function addMessage(role, text = "") {
+      const message = document.createElement("div");
+      message.className = `message ${role}`;
+      message.textContent = text;
+      chat.appendChild(message);
+      message.scrollIntoView({ behavior: "smooth", block: "end" });
+      return message;
+    }
+
+    function addAgentMessage() {
+      const message = addMessage("agent");
+      const status = document.createElement("div");
+      const answer = document.createElement("div");
+      status.className = "status";
+      message.append(status, answer);
+      return { status, answer };
+    }
+
+    function readEvent(event) {
+      return JSON.parse(event.data);
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const query = queryInput.value.trim();
+      if (!query) {
+        return;
+      }
+
+      if (currentStream) {
+        currentStream.close();
+      }
+
+      addMessage("user", query);
+      queryInput.value = "";
+      sendButton.disabled = true;
+
+      const agentMessage = addAgentMessage();
+      let streamFinished = false;
+      currentStream = new EventSource(`${apiBaseUrl}/chat?query=${encodeURIComponent(query)}`);
+
+      currentStream.addEventListener("status", (event) => {
+        agentMessage.status.textContent = readEvent(event).message;
+      });
+
+      currentStream.addEventListener("tool_call", (event) => {
+        agentMessage.status.textContent = readEvent(event).message;
+      });
+
+      currentStream.addEventListener("tool_result", (event) => {
+        agentMessage.status.textContent = readEvent(event).message;
+      });
+
+      currentStream.addEventListener("message", (event) => {
+        agentMessage.answer.textContent += readEvent(event).text;
+      });
+
+      currentStream.addEventListener("done", () => {
+        streamFinished = true;
+        agentMessage.status.textContent = "";
+        currentStream.close();
+        sendButton.disabled = false;
+      });
+
+      currentStream.addEventListener("error", () => {
+        if (streamFinished) {
+          return;
+        }
+
+        agentMessage.status.textContent = "The stream stopped unexpectedly.";
+        currentStream.close();
+        sendButton.disabled = false;
+      });
+    });
+  </script>
+</body>
+</html>
