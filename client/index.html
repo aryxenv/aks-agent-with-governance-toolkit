@@ -65,6 +65,52 @@
       font-size: 13px;
     }
 
+    .policy {
+      display: none;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      font-size: 13px;
+      border: 1px solid transparent;
+    }
+
+    .policy.allowed {
+      display: block;
+      color: #0f6c2f;
+      background: #effaf2;
+      border-color: #b7dfc2;
+    }
+
+    .policy.blocked {
+      display: block;
+      color: #a4262c;
+      background: #fdf3f4;
+      border-color: #f3b2b8;
+    }
+
+    .trace {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #eee;
+      color: #616161;
+      font-size: 13px;
+      white-space: normal;
+    }
+
+    .trace summary {
+      cursor: pointer;
+      color: #424242;
+    }
+
+    .trace ol {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+
+    .trace li {
+      margin: 4px 0;
+    }
+
     form {
       display: flex;
       gap: 8px;
@@ -107,14 +153,28 @@
     function addAgentMessage() {
       const message = addMessage("agent");
       const status = document.createElement("div");
+      const policy = document.createElement("div");
       const answer = document.createElement("div");
+      const trace = document.createElement("details");
+      const traceSummary = document.createElement("summary");
+      const traceSteps = document.createElement("ol");
       status.className = "status";
-      message.append(status, answer);
-      return { status, answer };
+      policy.className = "policy";
+      trace.className = "trace";
+      traceSummary.textContent = "Agent steps";
+      trace.append(traceSummary, traceSteps);
+      message.append(status, policy, answer, trace);
+      return { status, policy, answer, traceSteps };
     }
 
     function readEvent(event) {
       return JSON.parse(event.data);
+    }
+
+    function addTraceStep(agentMessage, text) {
+      const item = document.createElement("li");
+      item.textContent = text;
+      agentMessage.traceSteps.appendChild(item);
     }
 
     form.addEventListener("submit", (event) => {
@@ -135,27 +195,62 @@
 
       const agentMessage = addAgentMessage();
       let streamFinished = false;
+      let answerStarted = false;
+      let policyShown = false;
       currentStream = new EventSource(`${apiBaseUrl}/chat?query=${encodeURIComponent(query)}`);
 
       currentStream.addEventListener("status", (event) => {
-        agentMessage.status.textContent = readEvent(event).message;
+        const status = readEvent(event).message;
+        agentMessage.status.textContent = status;
+        addTraceStep(agentMessage, status);
       });
 
       currentStream.addEventListener("tool_call", (event) => {
-        agentMessage.status.textContent = readEvent(event).message;
+        const toolCall = readEvent(event);
+        agentMessage.status.textContent = toolCall.message;
+        addTraceStep(agentMessage, `Tool requested: ${toolCall.tool}`);
       });
 
       currentStream.addEventListener("tool_result", (event) => {
-        agentMessage.status.textContent = readEvent(event).message;
+        const toolResult = readEvent(event);
+        agentMessage.status.textContent = toolResult.message;
+        addTraceStep(agentMessage, `Tool completed: ${toolResult.result}`);
+
+        if (!policyShown && String(toolResult.result).includes("blocked by policy")) {
+          policyShown = true;
+          agentMessage.policy.className = "policy blocked";
+          agentMessage.policy.textContent = toolResult.result;
+          addTraceStep(agentMessage, toolResult.result);
+        }
+      });
+
+      currentStream.addEventListener("policy", (event) => {
+        const decision = readEvent(event);
+        policyShown = true;
+        agentMessage.policy.className = `policy ${decision.allowed ? "allowed" : "blocked"}`;
+        agentMessage.policy.textContent = decision.allowed
+          ? `Policy allowed: ${decision.matched_rule}`
+          : `Policy blocked: ${decision.reason}`;
+        addTraceStep(
+          agentMessage,
+          decision.allowed
+            ? `Policy allowed: ${decision.matched_rule}`
+            : `Policy blocked: ${decision.reason}`
+        );
       });
 
       currentStream.addEventListener("message", (event) => {
+        if (!answerStarted) {
+          answerStarted = true;
+          addTraceStep(agentMessage, "Started final response.");
+        }
         agentMessage.answer.textContent += readEvent(event).text;
       });
 
       currentStream.addEventListener("done", () => {
         streamFinished = true;
         agentMessage.status.textContent = "";
+        addTraceStep(agentMessage, "Completed.");
         currentStream.close();
         sendButton.disabled = false;
       });
@@ -166,6 +261,7 @@
         }
 
         agentMessage.status.textContent = "The stream stopped unexpectedly.";
+        addTraceStep(agentMessage, "Stream stopped unexpectedly.");
         currentStream.close();
         sendButton.disabled = false;
       });

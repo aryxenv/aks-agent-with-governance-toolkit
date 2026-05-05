@@ -19,6 +19,8 @@ client = FoundryChatClient(
     credential=AzureCliCredential(),
 )
 openmeteo = openmeteo_requests.Client()
+POLICY_BLOCK_PREFIX = "The weather lookup was blocked by policy. Reason: "
+POLICY_NAME = "weather-agent-tool-policy"
 
 
 # helper for get_weather tool
@@ -44,11 +46,35 @@ def geocode_location(location: str) -> tuple[str, float, float]:
     return match["display_name"], float(match["lat"]), float(match["lon"])
 
 
+# policy evaluation against the policy server
+def evaluate_action(tool_name: str, location: str) -> dict:
+    request_data = {"tool_name": tool_name, "location": location}
+    request = Request(
+        "http://localhost:8001/evaluate-action",
+        data=json.dumps(request_data).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+
+    try:
+        with urlopen(request, timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise RuntimeError(f"Policy evaluation failed with HTTP {exc.code}.") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Policy evaluation failed: {exc.reason}.") from exc
+
+
 @tool(approval_mode="never_require")
 def get_weather(
     location: Annotated[str, Field(description="The location to get the weather for.")],
 ) -> str:
     """Get the current temperature in Celsius for a location."""
+    # policy evaluation with AGT sidecar
+    decision = evaluate_action("get_weather", location)
+
+    if not decision.get("allowed", False):
+        return f"{POLICY_BLOCK_PREFIX}{decision.get('reason')}"
+
     display_name, latitude, longitude = geocode_location(location)
 
     responses = openmeteo.weather_api(
@@ -119,6 +145,20 @@ async def chat(query: str):
                     )
 
                 elif content.type == "function_result":
+                    tool_result = str(content.result or "")
+                    if tool_result.startswith(POLICY_BLOCK_PREFIX):
+                        yield sse(
+                            "policy",
+                            {
+                                "allowed": False,
+                                "reason": tool_result.removeprefix(
+                                    POLICY_BLOCK_PREFIX
+                                ),
+                                "matched_rule": None,
+                                "policy": POLICY_NAME,
+                            },
+                        )
+
                     yield sse(
                         "tool_result",
                         {
