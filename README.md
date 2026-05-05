@@ -20,3 +20,7 @@ Lightweight [frontend](./client/) to chat with the agent.
 ## k8s
 
 [Kubernetes](./k8s/) stuff for AKS.
+
+## Learning
+
+Want to try this yourself? Here's a visual learning guide to create a fully functional agent on AKS using MAF and AGT [here](./LEARNING.md).
