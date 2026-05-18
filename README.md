@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > Just a learning project.
 
-Agent server deployed on AKS with a frontend, a server running the weather agent using nomatim for location coordinates and openmeteo for live weather.
+Deployed a MAF Agent on AKS with Agent Governance Toolkit policies running as a sidecar in the same pod. The agent includes a frontend/backend layer and uses Nominatim and Open-Meteo for location and live weather data
 
 ## Agent
 
